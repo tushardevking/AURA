@@ -25,13 +25,25 @@ def code_writer(state: aurastate):
 User will give you a question and dataset columns.
 Return ONLY executable Python pandas code — no explanation, no markdown, no text.
 We have already imported pandas as pd and the dataframe is already loaded as variable 'df'.
-Do not include import pandas and pd.read_csv() in your code.Do not use print() statements. Store the final result in a variable called 'result'.""" }]
+Do not include import pandas and pd.read_csv() in your code.Do not use print() statements. Store the final result in a variable called 'result'. Also it should only contain code no backticks anything only simple code""" }]
     message.append({"role": "user","content": question+ data})
     response=client.chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=message
     )
-    return response.choices[0].message.content
+    return {"code": response.choices[0].message.content}
+
+def code_executer(state: aurastate):
+    code=state["code"]
+    df = pd.read_csv("HR_Employee_Attrition.csv")
+    safe_env={
+        "df": df,
+        "pd": pd
+    }
+    exec(code, safe_env)
+    result=safe_env["result"]
+    return {"analysis": result}
+
 
 test_state = {
     "Question": "show attrition by department",
@@ -48,5 +60,7 @@ test_state.update(state_after_load)
 
 # Step 3 — code_writer chalao updated state ke saath
 state_after_code = code_writer(test_state)
+test_state.update(state_after_code)
+state_after_analysis=code_executer(test_state)
 
-print(state_after_code)
+print(state_after_analysis)
