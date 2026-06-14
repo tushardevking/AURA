@@ -3,6 +3,7 @@ import pandas as pd
 import os
 from dotenv import load_dotenv as de
 from groq import Groq
+from langgraph.graph import StateGraph, START, END
 
 de()
 client=Groq(api_key=os.getenv("GROQ_API_KEY"))
@@ -57,25 +58,28 @@ def insights_writer(state: aurastate):
 
     return{"insights": response.choices[0].message.content}
 
-test_state = {
-    "Question": "show attrition by department",
+
+ques=str(input("Please enter your question: "))
+graph=StateGraph(aurastate)
+graph.add_node("dataloader", dataloader)
+graph.add_node("code_writer", code_writer)
+graph.add_node("code_executer", code_executer)
+graph.add_node("insights_writer", insights_writer)
+
+graph.add_edge("dataloader","code_writer")
+graph.add_edge("code_writer","code_executer")
+graph.add_edge("code_executer","insights_writer")
+
+graph.add_edge(START, "dataloader")
+graph.add_edge("insights_writer", END)
+
+app=graph.compile()
+result=app.invoke({
+    "Question": ques,
     "data": "",
     "code": "",
     "analysis": "",
     "insights": ""
-}
+})
 
-state_after_load = dataloader(test_state)
-
-# Step 2 — state merge karo
-test_state.update(state_after_load)
-
-# Step 3 — code_writer chalao updated state ke saath
-state_after_code = code_writer(test_state)
-test_state.update(state_after_code)
-state_after_analysis=code_executer(test_state)
-print("Generated code:")
-print(test_state["code"])
-test_state.update(state_after_analysis)
-state_after_insight=insights_writer(test_state)
-print(state_after_insight)
+print(result["insights"]) 
