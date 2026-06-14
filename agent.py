@@ -1,9 +1,11 @@
-from typing import TypedDict
+from typing import TypedDict, Any
 import pandas as pd
 import os
 from dotenv import load_dotenv as de
 from groq import Groq
 from langgraph.graph import StateGraph, START, END
+import plotly.express as px
+
 
 de()
 client=Groq(api_key=os.getenv("GROQ_API_KEY"))
@@ -11,8 +13,9 @@ class aurastate (TypedDict):
     Question: str
     data: str
     code: str
-    analysis: str
+    analysis: Any
     insights: str
+    chart: Any
 
 def dataloader(state: aurastate) :
     df=pd.read_csv("HR_Employee_Attrition.csv")
@@ -58,6 +61,29 @@ def insights_writer(state: aurastate):
 
     return{"insights": response.choices[0].message.content}
 
+def chartmaker(state: aurastate):
+    question=state["Question"]
+    analysis=state["analysis"]
+    insights=state["insights"]
+    message=[{"role": "system", "content": """
+                  You're an expert data analyst, user shares their question, data they gto from pandas and insights. your job is to turn that data into masterful aesthectically pleasing and simple to understand chart code of plotly.express. store the code in variable called fig, don't use any kind of backticks while returning the answer just simple code stored in fig variable"""}]
+    message.append({"role": "user", "content": question+str(analysis)+insights})
+    response=client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=message
+        )
+    safe_env={
+            "px":px,
+            "pd":pd,
+            "result":analysis,
+            "df": pd.read_csv("HR_Employee_Attrition.csv")  # ye add karo
+
+        }
+    exec(response.choices[0].message.content, safe_env)
+    chart=safe_env["fig"]
+    return {"chart": chart}
+        
+
 
 ques=str(input("Please enter your question: "))
 graph=StateGraph(aurastate)
@@ -65,13 +91,15 @@ graph.add_node("dataloader", dataloader)
 graph.add_node("code_writer", code_writer)
 graph.add_node("code_executer", code_executer)
 graph.add_node("insights_writer", insights_writer)
+graph.add_node("chartmaker", chartmaker)
 
 graph.add_edge("dataloader","code_writer")
 graph.add_edge("code_writer","code_executer")
 graph.add_edge("code_executer","insights_writer")
+graph.add_edge("insights_writer","chartmaker")
 
 graph.add_edge(START, "dataloader")
-graph.add_edge("insights_writer", END)
+graph.add_edge("chartmaker", END)
 
 app=graph.compile()
 result=app.invoke({
@@ -79,7 +107,8 @@ result=app.invoke({
     "data": "",
     "code": "",
     "analysis": "",
-    "insights": ""
+    "insights": "",
+    "chart": ""
 })
 
-print(result["insights"]) 
+print(result["chart"]) 
