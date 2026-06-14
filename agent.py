@@ -44,6 +44,18 @@ def code_executer(state: aurastate):
     result=safe_env["result"]
     return {"analysis": result}
 
+def insights_writer(state: aurastate):
+    question=state["Question"]
+    code=state["code"]
+    analysis=state["analysis"]
+    message=[{"role":"system","content":"You're a management consultant and your client has asked you the question for that you have the question, the code and the analysis code generated now like MBB consultant rewrite the insights from the analysis into proper MMB style consulting insights which is easier for the client to understand"}]
+    message.append({"role":"user", "content": question + code + str(analysis)})
+    response=client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=message
+    )
+
+    return{"insights": response.choices[0].message.content}
 
 test_state = {
     "Question": "show attrition by department",
@@ -62,5 +74,8 @@ test_state.update(state_after_load)
 state_after_code = code_writer(test_state)
 test_state.update(state_after_code)
 state_after_analysis=code_executer(test_state)
-
-print(state_after_analysis)
+print("Generated code:")
+print(test_state["code"])
+test_state.update(state_after_analysis)
+state_after_insight=insights_writer(test_state)
+print(state_after_insight)
