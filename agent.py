@@ -5,6 +5,7 @@ from dotenv import load_dotenv as de
 from groq import Groq
 from langgraph.graph import StateGraph, START, END
 import plotly.express as px
+import plotly
 
 
 de()
@@ -29,7 +30,8 @@ def code_writer(state: aurastate):
 User will give you a question and dataset columns.
 Return ONLY executable Python pandas code — no explanation, no markdown, no text.
 We have already imported pandas as pd and the dataframe is already loaded as variable 'df'.
-Do not include import pandas and pd.read_csv() in your code.Do not use print() statements. Store the final result in a variable called 'result'. Also it should only contain code no backticks anything only simple code""" }]
+Do not include import pandas and pd.read_csv() in your code.Do not use print() statements. Store the final result in a variable called 'result'. Also it should only contain code no backticks anything only simple code.
+If a column contains text values like 'Yes'/'No', convert to numeric first using: df['column'] = df['column'].map({'Yes': 1, 'No': 0})""" }]
     message.append({"role": "user","content": question+ data})
     response=client.chat.completions.create(
         model="llama-3.3-70b-versatile",
@@ -66,21 +68,56 @@ def chartmaker(state: aurastate):
     analysis=state["analysis"]
     insights=state["insights"]
     message=[{"role": "system", "content": """
-                  You're an expert data analyst, user shares their question, data they gto from pandas and insights. your job is to turn that data into masterful aesthectically pleasing and simple to understand chart code of plotly.express. store the code in variable called fig, don't use any kind of backticks while returning the answer just simple code stored in fig variable"""}]
+You are an expert data visualization specialist.
+
+Your job is to write Plotly Express code to visualize pandas data.
+
+WHAT YOU WILL RECEIVE:
+- User's question
+- Pandas analysis result
+- Business insights text
+
+STRICT RULES:
+- Only use 'px' for all charts — it is already imported as plotly.express
+- Never write 'import' anything — px, pd, df, result are all pre-loaded
+- Never use plotly.express directly — always use px
+- Never use print() statements
+- Never use backticks or markdown
+- Store final chart in variable called 'fig'
+- Return only executable Python code — nothing else
+
+CHART SELECTION RULES:
+- Comparing categories → px.bar()
+- Trend over time → px.line()
+- Distribution → px.histogram()
+- Part of whole → px.pie()
+- Two numeric columns → px.scatter()
+
+CHART QUALITY RULES:
+- Always add a clear title
+- Always label x and y axes
+- Use color_discrete_sequence for better colors
+- Keep it clean and professional
+Final Note: Only return the code no backticks no explanation just python executable code in fig variable so we don't get any runtime or any other kind of error              
+              
+"""}]
     message.append({"role": "user", "content": question+str(analysis)+insights})
     response=client.chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=message
         )
-    safe_env={
-            "px":px,
-            "pd":pd,
-            "result":analysis,
-            "df": pd.read_csv("HR_Employee_Attrition.csv")  # ye add karo
-
-        }
-    exec(response.choices[0].message.content, safe_env)
+    safe_env = {
+    "px": px,
+    "plotly": plotly,  # ye add karo
+    "pd": pd,
+    "result": analysis,
+    "df": pd.read_csv("HR_Employee_Attrition.csv")
+}
+    code = response.choices[0].message.content
+    code = code.replace("```python", "").replace("```", "").strip()
+    exec(code, safe_env)
     chart=safe_env["fig"]
+    chart.show()  # ye add karo
     return {"chart": chart}
         
 
