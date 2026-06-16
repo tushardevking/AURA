@@ -12,6 +12,7 @@ de()
 client=Groq(api_key=os.getenv("GROQ_API_KEY"))
 class aurastate (TypedDict):
     Question: str
+    filepath: str
     data: str
     code: str
     analysis: Any
@@ -19,7 +20,7 @@ class aurastate (TypedDict):
     chart: Any
 
 def dataloader(state: aurastate) :
-    df=pd.read_csv("HR_Employee_Attrition.csv")
+    df=pd.read_csv(state["filepath"])
     col=df.columns.tolist()
     return {"data": f"Columns: {str(col)}, Rows: {len(df)}"}
 
@@ -41,7 +42,7 @@ If a column contains text values like 'Yes'/'No', convert to numeric first using
 
 def code_executer(state: aurastate):
     code=state["code"]
-    df = pd.read_csv("HR_Employee_Attrition.csv")
+    df = pd.read_csv(state["filepath"])
     safe_env={
         "df": df,
         "pd": pd
@@ -98,7 +99,10 @@ CHART QUALITY RULES:
 - Always label x and y axes
 - Use color_discrete_sequence for better colors
 - Keep it clean and professional
-Final Note: Only return the code no backticks no explanation just python executable code in fig variable so we don't get any runtime or any other kind of error              
+IMPORTANT: The 'result' variable may be an aggregated DataFrame. 
+If you need original columns like JobRole, use 'df' instead of 'result'.
+Always check what columns are available before plotting.
+              Final Note: Only return the code no backticks no explanation just python executable code in fig variable so we don't get any runtime or any other kind of error              
               
 """}]
     message.append({"role": "user", "content": question+str(analysis)+insights})
@@ -111,7 +115,7 @@ Final Note: Only return the code no backticks no explanation just python executa
     "plotly": plotly,  # ye add karo
     "pd": pd,
     "result": analysis,
-    "df": pd.read_csv("HR_Employee_Attrition.csv")
+    "df": pd.read_csv(state["filepath"])
 }
     code = response.choices[0].message.content
     code = code.replace("```python", "").replace("```", "").strip()
@@ -120,10 +124,8 @@ Final Note: Only return the code no backticks no explanation just python executa
     chart.show()  # ye add karo
     return {"chart": chart}
         
-
-
-ques=str(input("Please enter your question: "))
 graph=StateGraph(aurastate)
+
 graph.add_node("dataloader", dataloader)
 graph.add_node("code_writer", code_writer)
 graph.add_node("code_executer", code_executer)
@@ -139,13 +141,3 @@ graph.add_edge(START, "dataloader")
 graph.add_edge("chartmaker", END)
 
 app=graph.compile()
-result=app.invoke({
-    "Question": ques,
-    "data": "",
-    "code": "",
-    "analysis": "",
-    "insights": "",
-    "chart": ""
-})
-
-print(result["chart"]) 
