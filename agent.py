@@ -8,9 +8,9 @@ import plotly.express as px
 import plotly
 
 
-de()
-client=Groq(api_key=os.getenv("GROQ_API_KEY"))
-class aurastate (TypedDict):
+de() #loading dotenv
+client=Groq(api_key=os.getenv("GROQ_API_KEY")) # getting api key
+class aurastate (TypedDict): #defining state
     Question: str
     filepath: str
     data: str
@@ -18,12 +18,12 @@ class aurastate (TypedDict):
     analysis: Any
     insights: str
     chart: Any
-
+# node in which data is loaded
 def dataloader(state: aurastate) :
     df=pd.read_csv(state["filepath"])
     col=df.columns.tolist()
     return {"data": f"Columns: {str(col)}, Rows: {len(df)}"}
-
+# In this we pass the question and data for the groq or AI to generate code for the question asked
 def code_writer(state: aurastate):
     question=state["Question"]
     data=state["data"]
@@ -39,18 +39,22 @@ If a column contains text values like 'Yes'/'No', convert to numeric first using
         messages=message
     )
     return {"code": response.choices[0].message.content}
-
+# This node generates the result by executing the code we got from code writer
 def code_executer(state: aurastate):
     code=state["code"]
     df = pd.read_csv(state["filepath"])
-    safe_env={
+    safe_env={ #this is very important to make sure the code executes nothing incorrect that can be destructive
         "df": df,
         "pd": pd
-    }
-    exec(code, safe_env)
-    result=safe_env["result"]
+    }    
+    try:
+        exec(code, safe_env)
+        result = safe_env.get("result", "Could not compute result")
+    except Exception as e:
+        result = f"Analysis failed: {str(e)}"
     return {"analysis": result}
 
+# This node generates insights based on the analysis we got 
 def insights_writer(state: aurastate):
     question=state["Question"]
     code=state["code"]
@@ -63,7 +67,7 @@ def insights_writer(state: aurastate):
     )
 
     return{"insights": response.choices[0].message.content}
-
+# Chartmaker node in this we pass the prompt to make chart then we add try catch block to stop from returning error
 def chartmaker(state: aurastate):
     question=state["Question"]
     analysis=state["analysis"]
@@ -117,11 +121,14 @@ Always check what columns are available before plotting.
     "result": analysis,
     "df": pd.read_csv(state["filepath"])
 }
-    code = response.choices[0].message.content
-    code = code.replace("```python", "").replace("```", "").strip()
-    exec(code, safe_env)
-    chart=safe_env["fig"]
-    chart.show()  # ye add karo
+    try:
+        code = response.choices[0].message.content
+        code = code.replace("```python", "").replace("```", "").strip()
+        exec(code, safe_env)
+        chart = safe_env["fig"]
+    except Exception as e:
+        # Fallback — simple chart banao
+        chart = px.bar(title=f"Could not generate chart: {str(e)}")
     return {"chart": chart}
         
 graph=StateGraph(aurastate)
